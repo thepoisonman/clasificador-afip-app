@@ -13,13 +13,20 @@ if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
     df = pd.read_excel(uploaded_file, sheet_name=xls.sheet_names[0], skiprows=1)
 
-    # Normalizar columnas
+    # Normalizar columnas según el formato
     if 'Nro. Doc. Emisor' in df.columns:
+        # Formato "Mis Comprobantes Recibidos"
         df.rename(columns={
             'Nro. Doc. Emisor': 'CUIT',
             'Denominación Emisor': 'Proveedor',
             'Imp. Total': 'Total'
         }, inplace=True)
+    elif 'CUIT' in df.columns:
+        # Formato "Comprobantes de Compras"
+        pass  # ya está bien
+    else:
+        st.error("⚠️ Formato de archivo no reconocido. Subí un archivo exportado de AFIP.")
+        st.stop()
 
     st.write("📄 Comprobantes cargados:")
     st.dataframe(df)
