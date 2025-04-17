@@ -36,7 +36,8 @@ if uploaded_file is not None:
         nueva_categoria = st.selectbox(
             f"Categoría para {row['Denominación Vendedor']}",
             ('Transporte', 'Alquiler', 'Servicios', 'Otros'),
-            index=['Transporte', 'Alquiler', 'Servicios', 'Otros'].index(row['Categoría'])
+            index=['Transporte', 'Alquiler', 'Servicios', 'Otros'].index(row['Categoría']),
+            key=f"categoria_{idx}"
         )
         df.at[idx, 'Categoría'] = nueva_categoria
 
