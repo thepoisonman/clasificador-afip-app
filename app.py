@@ -1,6 +1,7 @@
 
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
 # Título de la aplicación
 st.title("Clasificador de Compras AFIP")
@@ -43,10 +44,15 @@ if uploaded_file is not None:
 
     # Descargar archivo
     st.write("### Descargar archivo clasificado")
-    output_file = df.to_excel(index=False)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Clasificadas')
+    output.seek(0)
+
     st.download_button(
         label="📥 Descargar Excel con categorías",
-        data=output_file,
+        data=output,
         file_name="compras_clasificadas.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
