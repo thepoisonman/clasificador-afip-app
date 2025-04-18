@@ -1,37 +1,41 @@
 
 import streamlit as st
 import pandas as pd
-from io import BytesIO
+import io
 
-st.title("Clasificador AFIP App Refinado")
+st.title("Clasificador de Comprobantes AFIP")
 
-uploaded_file = st.file_uploader("Subí tu archivo Excel AFIP", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí tu Excel de Comprobantes AFIP", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    st.write("Vista previa del archivo cargado:", df.head())
 
-    # Detectar la columna CUIT por posición (columna 7 -> index 6)
-    if df.shape[1] >= 7:
-        df.rename(columns={df.columns[6]: "CUIT", df.columns[7]: "Proveedor"}, inplace=True)
-        df = df[df["CUIT"].astype(str).str.contains(r'\d')]
+    try:
+        # Renombrar columnas por posición
+        df.columns.values[6] = 'CUIT'
+        df.columns.values[7] = 'Proveedor'
 
-        st.write("Filtrado por CUIT válido:", df[["CUIT", "Proveedor"]])
+        # Filtrar solo las filas con CUIT válidos (11 dígitos numéricos)
+        df = df[df['CUIT'].astype(str).str.fullmatch(r'\d{11}')]
 
-        conceptos = []
-        for i in range(len(df)):
-            concepto_manual = st.text_input(
-                f"Concepto para {df.iloc[i]['Proveedor']} ({df.iloc[i]['CUIT']})",
-                key=f"concepto_{i}"
-            )
-            conceptos.append(concepto_manual)
+        # Clasificación automática simple
+        df["Concepto Detectado"] = df["Proveedor"].apply(lambda x: "Servicios" if "S.A." in str(x) else "Bienes")
 
-        df["Concepto Refinado"] = conceptos
+        st.subheader("Vista previa de los comprobantes filtrados")
+        st.dataframe(df)
+
+        # Guardar en memoria
+        output = io.BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
 
         # Botón de descarga
-        output = BytesIO()
-        df.to_excel(output, index=False)
-        st.download_button("Descargar Excel Refinado", data=output.getvalue(), file_name="clasificado.xlsx")
+        st.download_button(
+            label="📥 Descargar Excel refinado",
+            data=output,
+            file_name="comprobantes_refinados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-    else:
-        st.error("El archivo no contiene suficientes columnas para detectar CUIT y Proveedor.")
+    except Exception as e:
+        st.error(f"Ocurrió un error: {e}")
