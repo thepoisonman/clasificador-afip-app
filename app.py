@@ -81,6 +81,7 @@ if uploaded_file:
 
         st.subheader("Refinar conceptos manualmente")
         for i in range(len(df)):
+            # Cambiar la forma en que se presenta el Proveedor en la interfaz de refinamiento
             concepto_manual = st.text_input(f"Concepto para {df.iloc[i]['Proveedor']} ({df.iloc[i]['CUIT']})",
                                             df.iloc[i]["Concepto Detectado"],
                                             key=f"concepto_{i}")
