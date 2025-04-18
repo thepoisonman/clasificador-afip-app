@@ -20,12 +20,8 @@ st.title("Clasificador de Comprobantes AFIP")
 
 uploaded_file = st.file_uploader("Subí tu Excel de comprobantes AFIP", type=["xlsx"])
 if uploaded_file:
-    df = pd.read_excel(uploaded_file, header=None)
-
-    # Excluir las primeras filas si es un encabezado de datos
-    df.columns = df.iloc[0]
-    df = df.drop([0])
-    df = df.reset_index(drop=True)
+    # Cargar el archivo y usar la segunda fila como encabezado
+    df = pd.read_excel(uploaded_file, header=1)
 
     # Deducción de CUIT/DNI y Proveedor a partir de los datos de la columna
     def es_cuit_o_dni(value):
@@ -36,13 +32,12 @@ if uploaded_file:
     cuit_col = None
     proveedor_col = None
 
-    # Detectar CUIT/DNI y Proveedor, solo si la columna tiene datos tipo 'str'
+    # Detectar CUIT/DNI y Proveedor
     for col in df.columns:
-        if df[col].dtype == 'object':  # Asegurarse de que estamos trabajando con columnas de texto
-            if df[col].apply(es_cuit_o_dni).sum() > 0:
-                cuit_col = col
-            elif df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
-                proveedor_col = col
+        if df[col].apply(es_cuit_o_dni).sum() > 0:
+            cuit_col = col
+        elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
+            proveedor_col = col
 
     # Excluir valores de moneda en la columna de proveedor (detectar valores como "$", etc.)
     def es_valor_monetario(value):
