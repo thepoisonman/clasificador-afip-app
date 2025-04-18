@@ -42,6 +42,18 @@ if uploaded_file:
         elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
             proveedor_col = col
 
+    # Evitar que el proveedor sea confundido con valores monetarios
+    def es_valor_monetario(value):
+        # Detectar valores numéricos que pueden ser cantidades de dinero
+        try:
+            return isinstance(value, (int, float)) or bool(re.match(r'^\$?(\d{1,3})(\.\d{3})*(,\d{2})?$', str(value)))
+        except:
+            return False
+
+    if proveedor_col is not None:
+        # Filtrar la columna del proveedor y corregir posibles valores monetarios
+        df['Proveedor'] = df[proveedor_col].apply(lambda x: x if not es_valor_monetario(x) else None)
+
     # Deducción adicional para proveedor basado en denominaciones societarias
     if proveedor_col is None:
         denominaciones = ["SA", "SRL", "SAS", "S.C.A.", "S.A.", "S.R.L.", "S.A.S."]
@@ -52,6 +64,10 @@ if uploaded_file:
                     break
             if proveedor_col:
                 break
+
+    # Renombrar las columnas para mejorar la visualización
+    df.columns = ['Fecha', 'Tipo', 'Punto de Venta', 'Número Desde', 'Número Hasta', 'Tipo Doc. Vendedor',
+                  'CUIT', 'Proveedor', 'Concepto Detectado']
 
     if cuit_col and proveedor_col:
         df['CUIT'] = df[cuit_col]
