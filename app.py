@@ -48,31 +48,11 @@ if uploaded_file:
     st.write(f"Columna de CUIT detectada: {cuit_col}")
     st.write(f"Columna de Proveedor detectada: {proveedor_col}")
 
-    # Deducción adicional para proveedor basado en denominaciones societarias
-    if proveedor_col is None:
-        denominaciones = ["SA", "SRL", "SAS", "S.C.A.", "S.A.", "S.R.L.", "S.A.S."]
-        for col in df.columns:
-            for denominacion in denominaciones:
-                if df[col].apply(lambda x: isinstance(x, str) and denominacion in x).sum() > 0:
-                    proveedor_col = col
-                    break
-            if proveedor_col:
-                break
+    # Preguntar al usuario si las columnas están correctamente asignadas
+    columnas_correctas = st.radio("¿Están correctas las columnas de CUIT y Proveedor?", ('Sí', 'No'))
 
-    # Excluir valores de moneda en la columna de proveedor (detectar valores como "$", etc.)
-    def es_valor_monetario(value):
-        # Detectar valores que parezcan cantidades monetarias (ej. "$1234" o "1234.00")
-        try:
-            return isinstance(value, (int, float)) or bool(re.match(r'^\$?(\d{1,3})(\.\d{3})*(,\d{2})?$', str(value)))
-        except:
-            return False
-
-    if proveedor_col is not None:
-        # Filtrar la columna del proveedor para excluir valores monetarios (por ejemplo "$")
-        df['Proveedor'] = df[proveedor_col].apply(lambda x: None if es_valor_monetario(x) else x)
-
-    # Si la detección automática falla, permitir que el usuario seleccione las columnas correctas
-    if not cuit_col or not proveedor_col:
+    if columnas_correctas == 'No':
+        # Permitir que el usuario seleccione manualmente las columnas de CUIT y Proveedor
         st.subheader("Seleccione manualmente las columnas de CUIT y Proveedor")
         cuit_col = st.selectbox("Seleccione la columna de CUIT", df.columns, key="cuit_column")
         proveedor_col = st.selectbox("Seleccione la columna de Proveedor", df.columns, key="proveedor_column")
