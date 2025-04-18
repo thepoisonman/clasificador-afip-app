@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import json
 import re
+import requests
 
 # Crear carpetas necesarias
 os.makedirs('outputs', exist_ok=True)
@@ -75,20 +76,62 @@ if uploaded_file:
         df['CUIT'] = df[cuit_col]
         df['Proveedor'] = df[proveedor_col]
 
-        # Lógica mejorada de detección de conceptos
-        def detectar_concepto(row):
+        # Lógica mejorada de detección de conceptos con consulta API
+        def obtener_informacion_proveedor(cuit):
+            # Obtenemos la información del proveedor a partir de su CUIT
+            params = {
+                "cuit": cuit,  # CUIT del proveedor
+                "api_key": "TU_API_KEY_AQUI"  # Asegúrate de agregar tu API Key
+            }
+            
+            try:
+                response = requests.get("https://api.cuitonline.com.ar/api/v1/consultas", params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data
+                else:
+                    st.warning(f"No se pudo obtener información para el CUIT {cuit}")
+                    return None
+            except Exception as e:
+                st.error(f"Error al consultar la API: {e}")
+                return None
+
+        # Mejora la precisión de la detección de concepto usando la información del proveedor
+        def mejorar_precision_concepto(row):
             proveedor = str(row['Proveedor']).lower()
-            if 'mercadolibre' in proveedor:
-                return 'Venta MercadoLibre'
-            elif 'sushi' in proveedor:
-                return 'Comida Rápida'
-            elif 'tecnología' in proveedor:
-                return 'Electrónica'
+            cuit = str(row['CUIT']).strip()
+
+            # Consultar la API para obtener más detalles del proveedor
+            proveedor_info = obtener_informacion_proveedor(cuit)
+
+            if proveedor_info:
+                # Si la API devuelve información, usamos la actividad para mejorar la precisión
+                actividad = proveedor_info.get('actividad', '').lower()
+                if 'mercadolibre' in proveedor:
+                    return 'Venta MercadoLibre'
+                elif 'sushi' in proveedor:
+                    return 'Comida Rápida'
+                elif 'tecnología' in actividad:
+                    return 'Electrónica'
+                elif 'alimentación' in actividad:
+                    return 'Comida y Bebidas'
+                elif 'consultoría' in actividad:
+                    return 'Servicios de Consultoría'
+                else:
+                    return 'Otros'  # Concepto aún muy general
             else:
-                return 'Otros'
+                # Si no encontramos información en la API, volvemos a la lógica básica
+                if 'mercadolibre' in proveedor:
+                    return 'Venta MercadoLibre'
+                elif 'sushi' in proveedor:
+                    return 'Comida Rápida'
+                elif 'tecnología' in proveedor:
+                    return 'Electrónica'
+                else:
+                    return 'Otros'  # Concepto aún muy general
 
         # Aplicar la detección de concepto mejorada
-        df['Concepto Detectado'] = df.apply(detectar_concepto, axis=1)
+        df['Concepto Detectado'] = df.apply(mejorar_precision_concepto, axis=1)
 
         st.dataframe(df)
 
