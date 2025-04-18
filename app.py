@@ -62,6 +62,12 @@ if uploaded_file:
             if proveedor_col:
                 break
 
+    # Renombrar las columnas para mejorar la visualización
+    if len(df.columns) == 9:
+        df.columns = ['Fecha', 'Tipo', 'Punto de Venta', 'Número Desde', 'Número Hasta', 'Tipo Doc. Vendedor', 'CUIT', 'Proveedor', 'Concepto Detectado']
+    else:
+        st.warning("El archivo no tiene el número exacto de columnas esperado, pero se continuará con el procesamiento.")
+
     if cuit_col and proveedor_col:
         df['CUIT'] = df[cuit_col]
         df['Proveedor'] = df[proveedor_col]
