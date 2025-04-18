@@ -43,6 +43,11 @@ if uploaded_file:
         elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
             proveedor_col = col
 
+    # Mostrar registros de depuración para identificar las columnas detectadas
+    st.subheader("Registros de depuración de las columnas detectadas")
+    st.write(f"Columna de CUIT detectada: {cuit_col}")
+    st.write(f"Columna de Proveedor detectada: {proveedor_col}")
+
     # Deducción adicional para proveedor basado en denominaciones societarias
     if proveedor_col is None:
         denominaciones = ["SA", "SRL", "SAS", "S.C.A.", "S.A.", "S.R.L.", "S.A.S."]
