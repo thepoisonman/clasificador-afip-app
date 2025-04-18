@@ -1,69 +1,57 @@
 
 import streamlit as st
 import pandas as pd
-import os
 import json
+import os
+from utils.clasificador import clasificar_gastos
+from utils.refinador import refinar_conceptos
 
-# Crear carpeta outputs si no existe
-os.makedirs("outputs", exist_ok=True)
+# Crear carpetas necesarias
+os.makedirs('outputs', exist_ok=True)
+os.makedirs('logs', exist_ok=True)
 
-# Cargar memoria de refinamientos si existe
+# Cargar memoria
 if os.path.exists("memory.json"):
     with open("memory.json", "r") as f:
-        memory = json.load(f)
+        memoria = json.load(f)
 else:
-    memory = {}
+    memoria = {}
 
-st.title("Clasificador de Compras AFIP")
+st.title("Clasificador de Comprobantes AFIP")
 
-uploaded_file = st.file_uploader("Subí tu Excel de compras AFIP", type=["xlsx"])
-
+uploaded_file = st.file_uploader("Subí tu Excel de comprobantes AFIP", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
 
-    # Detectar columna CUIT
-    cuit_col = next((col for col in df.columns if "CUIT" in col.upper()), None)
-    proveedor_col = next((col for col in df.columns if "PROVEEDOR" in col.upper() or "EMISOR" in col.upper()), None)
+    # Detectar columnas CUIT y Proveedor
+    cuit_col = next((col for col in df.columns if df[col].astype(str).str.contains(r'\d{7,8,11}').any()), None)
+    proveedor_col = next((col for col in df.columns if 'mercado' in df[col].astype(str).str.lower().values or 'proveedor' in col.lower()), None)
 
-    if not cuit_col or not proveedor_col:
-        st.error("No se detectaron correctamente las columnas de CUIT y Proveedor.")
-    else:
-        conceptos = []
-        for index, row in df.iterrows():
-            cuit = str(row[cuit_col])
-            proveedor = str(row[proveedor_col])
+    if cuit_col and proveedor_col:
+        df['CUIT'] = df[cuit_col]
+        df['Proveedor'] = df[proveedor_col]
+        df['Concepto Detectado'] = df.apply(lambda row: clasificar_gastos(row['Proveedor'], row['CUIT'], memoria), axis=1)
 
-            # Usar memoria si existe
-            concepto = memory.get(cuit, "Otros")
-            conceptos.append(concepto)
-
-        df["Concepto"] = conceptos
-
-        st.success("Clasificación generada.")
         st.dataframe(df)
 
-        df.to_excel("outputs/clasificado.xlsx", index=False)
-        with open("outputs/clasificado.xlsx", "rb") as f:
-            st.download_button("📥 Descargar Excel Clasificado", f, file_name="clasificado.xlsx")
+        output_file = f"outputs/comprobantes_clasificados.xlsx"
+        df.to_excel(output_file, index=False)
+        st.success(f"Archivo clasificado generado: {output_file}")
 
-        st.markdown("### 🔧 Refinar conceptos")
+        st.subheader("Refinar conceptos manualmente")
+        for i in range(len(df)):
+            concepto_manual = st.text_input(f"Concepto para {df.iloc[i]['Proveedor']} ({df.iloc[i]['CUIT']})",
+                                            df.iloc[i]["Concepto Detectado"],
+                                            key=f"concepto_{i}")
+            df.at[i, "Concepto Detectado"] = concepto_manual
+            memoria[f"{df.iloc[i]['CUIT']}|{df.iloc[i]['Proveedor']}"] = concepto_manual
 
-        nuevos_conceptos = {}
-        for index, row in df.iterrows():
-            proveedor = str(row[proveedor_col])
-            cuit = str(row[cuit_col])
-            concepto_actual = row["Concepto"]
+        refined_output = f"outputs/comprobantes_refinados.xlsx"
+        df.to_excel(refined_output, index=False)
+        st.success(f"Archivo refinado generado: {refined_output}")
 
-            nuevo = st.text_input(f"{proveedor} ({cuit})", concepto_actual, key=index)
-            nuevos_conceptos[cuit] = nuevo
+        with open("memory.json", "w") as f:
+            json.dump(memoria, f, indent=4)
 
-        if st.button("Guardar y descargar refinado"):
-            df["Concepto"] = df[cuit_col].map(nuevos_conceptos)
-            df.to_excel("outputs/refinado.xlsx", index=False)
-            with open("outputs/refinado.xlsx", "rb") as f:
-                st.download_button("📥 Descargar Excel Refinado", f, file_name="refinado.xlsx")
-
-            memory.update(nuevos_conceptos)
-            with open("memory.json", "w") as f:
-                json.dump(memory, f)
-
+    else:
+        st.error("No se detectaron correctamente las columnas de CUIT y Proveedor.")
