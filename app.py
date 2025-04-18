@@ -2,63 +2,66 @@
 import streamlit as st
 import pandas as pd
 import requests
-import io
+import os
 
-st.title("Clasificador de Comprobantes AFIP")
+st.title("Clasificador AFIP - Prueba CUIT Online")
 
-uploaded_file = st.file_uploader("Subí tu archivo de compras AFIP (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí tu archivo de compras AFIP (Excel)", type=["xlsx"])
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file, skiprows=7)  # ignorar encabezados iniciales
+    df = pd.read_excel(uploaded_file)
 
-    # Verificar si hay una columna CUIT
-    cuit_col = None
-    for col in df.columns:
-        if "CUIT" in col.upper():
-            cuit_col = col
-            break
+    # Intentar ubicar la columna CUIT correctamente (en la posición 7 según indicaste)
+    cuit_col = df.columns[6]  # posición 7 -> índice 6
+    proveedor_col = df.columns[7]  # posición 8 -> índice 7
 
-    if cuit_col is None:
-        st.error("No se encontró una columna que contenga 'CUIT'. Verificá el archivo.")
-    else:
-        df["CUIT"] = df[cuit_col]
+    st.write("CUIT detectado en columna:", cuit_col)
+    st.write("Proveedor detectado en columna:", proveedor_col)
 
-        # Detectar conceptos automáticos según proveedor
-        def detectar_concepto(proveedor):
-            if pd.isna(proveedor):
-                return "Desconocido"
-            proveedor = proveedor.lower()
-            if "super" in proveedor or "mercado" in proveedor:
-                return "Alimentos"
-            if "YPF" in proveedor or "AXION" in proveedor:
-                return "Combustible"
-            return "Otros"
+    # Limpiar encabezados erróneos
+    df = df[df[cuit_col].astype(str).str.contains(r'^[0-9]{11}$', na=False)]
 
-        df["Concepto Detectado"] = df["Proveedor"].apply(detectar_concepto)
+    def obtener_concepto(cuit):
+        api_key = "DEMO-API-KEY"
+        url = f"https://api.cuitonline.com/afip/v1/persona/{cuit}?apikey={api_key}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("actividad", "No encontrada")
+            else:
+                return "Error API"
+        except:
+            return "Error de conexión"
 
-        # Corrección manual
-        st.subheader("Correcciones manuales")
-        conceptos = []
-        for i in range(len(df)):
-            proveedor = df.iloc[i]["Proveedor"]
-            cuit = df.iloc[i]["CUIT"]
-            concepto_detectado = df.iloc[i]["Concepto Detectado"]
-            concepto_manual = st.text_input(
-                f"{proveedor} ({cuit})", concepto_detectado, key=f"{i}"
-            )
-            conceptos.append(concepto_manual)
+    df["Concepto Detectado"] = df[cuit_col].apply(obtener_concepto)
 
-        df["Concepto Final"] = conceptos
+    st.write("Vista previa del archivo:")
+    st.dataframe(df[[proveedor_col, cuit_col, "Concepto Detectado"]])
 
-        # Descargar archivo resultante
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False)
-        output.seek(0)
-
-        st.download_button(
-            label="Descargar Excel Clasificado",
-            data=output,
-            file_name="clasificado_afip.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # Corrección de conceptos manual
+    conceptos_refinados = []
+    for i in range(len(df)):
+        concepto_manual = st.text_input(
+            f"Concepto para {df.iloc[i][proveedor_col]} ({df.iloc[i][cuit_col]})",
+            df.iloc[i]["Concepto Detectado"],
+            key=f"concepto_{i}"
         )
+        conceptos_refinados.append(concepto_manual)
+
+    df["Concepto Final"] = conceptos_refinados
+
+    # Descargar archivo corregido
+    if not os.path.exists("outputs"):
+        os.makedirs("outputs")
+
+    output_path = "outputs/comprobantes_clasificados.xlsx"
+    df.to_excel(output_path, index=False)
+
+    with open(output_path, "rb") as file:
+        btn = st.download_button(
+            label="📥 Descargar Excel Clasificado",
+            data=file,
+            file_name="comprobantes_clasificados.xlsx"
+        )
+    
