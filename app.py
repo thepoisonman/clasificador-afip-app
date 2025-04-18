@@ -22,7 +22,7 @@ uploaded_file = st.file_uploader("Subí tu Excel de comprobantes AFIP", type=["x
 if uploaded_file:
     df = pd.read_excel(uploaded_file, header=None)
 
-    # Excluir las filas de encabezado
+    # Excluir las primeras filas si es un encabezado de datos
     df.columns = df.iloc[0]
     df = df.drop([0])
     df = df.reset_index(drop=True)
@@ -36,14 +36,15 @@ if uploaded_file:
     cuit_col = None
     proveedor_col = None
 
-    # Detectar CUIT/DNI y Proveedor
+    # Detectar CUIT/DNI y Proveedor, solo si la columna tiene datos tipo 'str'
     for col in df.columns:
-        if df[col].apply(es_cuit_o_dni).sum() > 0:
-            cuit_col = col
-        elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
-            proveedor_col = col
+        if df[col].dtype == 'object':  # Asegurarse de que estamos trabajando con columnas de texto
+            if df[col].apply(es_cuit_o_dni).sum() > 0:
+                cuit_col = col
+            elif df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
+                proveedor_col = col
 
-    # Filtrar la columna del proveedor para excluir valores monetarios
+    # Excluir valores de moneda en la columna de proveedor (detectar valores como "$", etc.)
     def es_valor_monetario(value):
         # Detectar valores que parezcan cantidades monetarias (ej. "$1234" o "1234.00")
         try:
