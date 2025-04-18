@@ -10,10 +10,21 @@ if not os.path.exists("outputs"):
 
 st.title("Clasificador de Facturas AFIP")
 
-uploaded_file = st.file_uploader("Subí tu Excel de compras AFIP", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí tu archivo Excel de compras AFIP", type=["xlsx"])
+
+def limpiar_filas_invalidas(df):
+    # Filtra filas que contienen encabezados no deseados o subtotales
+    return df[~df.apply(lambda row: row.astype(str).str.contains('Fecha|Tipo|Total', case=False).any(), axis=1)]
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+    df_raw = pd.read_excel(uploaded_file, header=None)
+
+    # Buscar la fila que contiene los encabezados
+    header_row = df_raw[df_raw.apply(lambda row: row.astype(str).str.contains("CUIT").any(), axis=1)].index[0]
+    df = pd.read_excel(uploaded_file, header=header_row)
+
+    # Limpiar filas que contienen encabezados o subtotales
+    df = limpiar_filas_invalidas(df)
 
     # Detección dinámica de CUIT y Proveedor
     cuit_pattern = re.compile(r'\b(20|23|24|27|30|33|34)\d{9}\b')
@@ -43,10 +54,12 @@ if uploaded_file is not None:
 
         # Refinamiento manual
         st.subheader("🔧 Refinar conceptos")
+        conceptos_refinados = []
         for i in range(len(df)):
             concepto_manual = st.text_input(f"{df.iloc[i][prov_col]} ({df.iloc[i][cuit_col]})",
                                             df.iloc[i]["Concepto Detectado"], key=f"input_{i}")
-            df.at[i, "Concepto Detectado"] = concepto_manual
+            conceptos_refinados.append(concepto_manual)
+        df["Concepto Refinado"] = conceptos_refinados
 
         output_path_ref = os.path.join("outputs", "clasificado_refinado.xlsx")
         df.to_excel(output_path_ref, index=False)
