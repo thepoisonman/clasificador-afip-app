@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import os
 import json
-from utils.refinador import refinar_conceptos
+import re
 
 # Crear carpetas necesarias
 os.makedirs('outputs', exist_ok=True)
@@ -22,9 +22,32 @@ uploaded_file = st.file_uploader("Subí tu Excel de comprobantes AFIP", type=["x
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
 
-    # Detectar las columnas de CUIT y Proveedor de manera flexible, incluyendo casos como "Número Documento Emisor"
-    cuit_col = next((col for col in df.columns if 'cuit' in col.lower() or 'dni' in col.lower() or 'documento' in col.lower() or 'emisor' in col.lower()), None)
-    proveedor_col = next((col for col in df.columns if 'proveedor' in col.lower() or 'razon' in col.lower() or 'emisor' in col.lower()), None)
+    # Deducción de CUIT/DNI y Proveedor a partir de los datos de la columna
+    def es_cuit_o_dni(value):
+        # Validar si es un CUIT (11 dígitos) o un DNI (7-8 dígitos)
+        value = str(value).strip()
+        return len(value) >= 7 and len(value) <= 11 and value.isdigit()
+
+    cuit_col = None
+    proveedor_col = None
+
+    # Detectar CUIT/DNI y Proveedor
+    for col in df.columns:
+        if df[col].apply(es_cuit_o_dni).sum() > 0:
+            cuit_col = col
+        elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
+            proveedor_col = col
+
+    # Deducción adicional para proveedor basado en denominaciones societarias
+    if proveedor_col is None:
+        denominaciones = ["SA", "SRL", "SAS", "S.C.A.", "S.A.", "S.R.L.", "S.A.S."]
+        for col in df.columns:
+            for denominacion in denominaciones:
+                if df[col].apply(lambda x: isinstance(x, str) and denominacion in x).sum() > 0:
+                    proveedor_col = col
+                    break
+            if proveedor_col:
+                break
 
     if cuit_col and proveedor_col:
         df['CUIT'] = df[cuit_col]
