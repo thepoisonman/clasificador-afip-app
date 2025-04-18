@@ -74,13 +74,31 @@ if uploaded_file:
     if cuit_col and proveedor_col:
         df['CUIT'] = df[cuit_col]
         df['Proveedor'] = df[proveedor_col]
-        df['Concepto Detectado'] = df.apply(lambda row: memoria.get(row['CUIT'], "Otros"), axis=1)
+
+        # Lógica mejorada de detección de conceptos
+        def detectar_concepto(row):
+            proveedor = str(row['Proveedor']).lower()
+            if 'mercadolibre' in proveedor:
+                return 'Venta MercadoLibre'
+            elif 'sushi' in proveedor:
+                return 'Comida Rápida'
+            elif 'tecnología' in proveedor:
+                return 'Electrónica'
+            else:
+                return 'Otros'
+
+        # Aplicar la detección de concepto mejorada
+        df['Concepto Detectado'] = df.apply(detectar_concepto, axis=1)
 
         st.dataframe(df)
 
+        # Crear archivo Excel clasificado
         output_file = f"outputs/comprobantes_clasificados.xlsx"
         df.to_excel(output_file, index=False)
         st.success(f"Archivo clasificado generado: {output_file}")
+
+        # Proveer un enlace para descargar el archivo clasificado
+        st.download_button(label="Descargar Excel Clasificado", data=open(output_file, "rb").read(), file_name="comprobantes_clasificados.xlsx")
 
         st.subheader("Refinar conceptos manualmente")
         for i in range(len(df)):
@@ -94,6 +112,9 @@ if uploaded_file:
         refined_output = f"outputs/comprobantes_refinados.xlsx"
         df.to_excel(refined_output, index=False)
         st.success(f"Archivo refinado generado: {refined_output}")
+
+        # Proveer un enlace para descargar el archivo refinado
+        st.download_button(label="Descargar Excel Refinado", data=open(refined_output, "rb").read(), file_name="comprobantes_refinados.xlsx")
 
         # Validar y asegurar que los valores en 'memoria' sean serializables
         memoria_validada = {str(key): str(value) if isinstance(value, (int, float, str)) else None for key, value in memoria.items()}
