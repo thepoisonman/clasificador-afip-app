@@ -57,10 +57,13 @@ if uploaded_file:
         cuit_col = st.selectbox("Seleccione la columna de CUIT", df.columns, key="cuit_column")
         proveedor_col = st.selectbox("Seleccione la columna de Proveedor", df.columns, key="proveedor_column")
 
-        # Guardar la corrección del usuario en memoria para futuros usos
-        if cuit_col and proveedor_col:
-            memoria['ultimo_cuit_col'] = cuit_col
-            memoria['ultimo_proveedor_col'] = proveedor_col
+        # Mostrar botón de confirmación para guardar la corrección
+        if st.button("Confirmar selección de columnas"):
+            # Guardar la corrección del usuario en memoria para futuros usos
+            if cuit_col and proveedor_col:
+                memoria['ultimo_cuit_col'] = cuit_col
+                memoria['ultimo_proveedor_col'] = proveedor_col
+                st.success("Corrección guardada en la memoria.")
 
     # Renombrar las columnas para mejorar la visualización
     if len(df.columns) == 9:
