@@ -85,8 +85,11 @@ if uploaded_file:
         df.to_excel(refined_output, index=False)
         st.success(f"Archivo refinado generado: {refined_output}")
 
+        # Validar y asegurar que los valores en 'memoria' sean serializables
+        memoria_validada = {str(key): str(value) if isinstance(value, (int, float, str)) else None for key, value in memoria.items()}
+
         with open("memory.json", "w") as f:
-            json.dump(memoria, f, indent=4)
+            json.dump(memoria_validada, f, indent=4)
 
     else:
         st.error("No se detectaron correctamente las columnas de CUIT y Proveedor.")
