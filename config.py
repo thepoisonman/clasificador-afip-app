@@ -1,2 +1,1 @@
-
-CUIT_API_KEY = ""
+API_KEY = 'test_api_key_123456'
