@@ -42,17 +42,17 @@ if uploaded_file:
         elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
             proveedor_col = col
 
-    # Evitar que el proveedor sea confundido con valores monetarios
+    # Excluir valores de moneda en la columna de proveedor (detectar valores como "$", etc.)
     def es_valor_monetario(value):
-        # Detectar valores numéricos que pueden ser cantidades de dinero
+        # Detectar valores que parezcan cantidades monetarias (ej. "$1234" o "1234.00")
         try:
             return isinstance(value, (int, float)) or bool(re.match(r'^\$?(\d{1,3})(\.\d{3})*(,\d{2})?$', str(value)))
         except:
             return False
 
     if proveedor_col is not None:
-        # Filtrar la columna del proveedor y corregir posibles valores monetarios
-        df['Proveedor'] = df[proveedor_col].apply(lambda x: x if not es_valor_monetario(x) else None)
+        # Filtrar la columna del proveedor para excluir valores monetarios (por ejemplo "$")
+        df['Proveedor'] = df[proveedor_col].apply(lambda x: None if es_valor_monetario(x) else x)
 
     # Deducción adicional para proveedor basado en denominaciones societarias
     if proveedor_col is None:
