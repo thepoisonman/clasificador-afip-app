@@ -23,7 +23,11 @@ if uploaded_file:
     # Cargar el archivo y usar la segunda fila como encabezado
     df = pd.read_excel(uploaded_file, header=1)
 
-    # Deducción de CUIT/DNI y Proveedor a partir de los datos de la columna
+    # Mostrar el preview de las primeras filas para validación
+    st.subheader("Preview de los datos cargados")
+    st.dataframe(df.head())
+
+    # Proceso de detección avanzada de CUIT/DNI y Proveedor
     def es_cuit_o_dni(value):
         # Validar si es un CUIT (11 dígitos) o un DNI (7-8 dígitos)
         value = str(value).strip()
@@ -32,12 +36,23 @@ if uploaded_file:
     cuit_col = None
     proveedor_col = None
 
-    # Detectar CUIT/DNI y Proveedor
+    # Detección de columnas de CUIT/DNI y Proveedor
     for col in df.columns:
         if df[col].apply(es_cuit_o_dni).sum() > 0:
             cuit_col = col
         elif df[col].dtype == 'object' and df[col].apply(lambda x: isinstance(x, str) and not es_cuit_o_dni(x)).sum() > 0:
             proveedor_col = col
+
+    # Deducción adicional para proveedor basado en denominaciones societarias
+    if proveedor_col is None:
+        denominaciones = ["SA", "SRL", "SAS", "S.C.A.", "S.A.", "S.R.L.", "S.A.S."]
+        for col in df.columns:
+            for denominacion in denominaciones:
+                if df[col].apply(lambda x: isinstance(x, str) and denominacion in x).sum() > 0:
+                    proveedor_col = col
+                    break
+            if proveedor_col:
+                break
 
     # Excluir valores de moneda en la columna de proveedor (detectar valores como "$", etc.)
     def es_valor_monetario(value):
@@ -51,16 +66,11 @@ if uploaded_file:
         # Filtrar la columna del proveedor para excluir valores monetarios (por ejemplo "$")
         df['Proveedor'] = df[proveedor_col].apply(lambda x: None if es_valor_monetario(x) else x)
 
-    # Deducción adicional para proveedor basado en denominaciones societarias
-    if proveedor_col is None:
-        denominaciones = ["SA", "SRL", "SAS", "S.C.A.", "S.A.", "S.R.L.", "S.A.S."]
-        for col in df.columns:
-            for denominacion in denominaciones:
-                if df[col].apply(lambda x: isinstance(x, str) and denominacion in x).sum() > 0:
-                    proveedor_col = col
-                    break
-            if proveedor_col:
-                break
+    # Si la detección automática falla, permitir que el usuario seleccione las columnas correctas
+    if not cuit_col or not proveedor_col:
+        st.subheader("Seleccione manualmente las columnas de CUIT y Proveedor")
+        cuit_col = st.selectbox("Seleccione la columna de CUIT", df.columns)
+        proveedor_col = st.selectbox("Seleccione la columna de Proveedor", df.columns)
 
     # Renombrar las columnas para mejorar la visualización
     if len(df.columns) == 9:
