@@ -22,6 +22,10 @@ uploaded_file = st.file_uploader("Subí tu Excel de comprobantes AFIP", type=["x
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
 
+    # Excluir la primera fila si es un encabezado de datos
+    if df.iloc[0].str.contains("Fecha").any():
+        df = df[1:].reset_index(drop=True)
+
     # Deducción de CUIT/DNI y Proveedor a partir de los datos de la columna
     def es_cuit_o_dni(value):
         # Validar si es un CUIT (11 dígitos) o un DNI (7-8 dígitos)
