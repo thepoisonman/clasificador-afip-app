@@ -1,41 +1,61 @@
 
 import streamlit as st
 import pandas as pd
-import io
+import numpy as np
+import re
+import os
 
 st.title("Clasificador de Comprobantes AFIP")
 
-uploaded_file = st.file_uploader("Subí tu Excel de Comprobantes AFIP", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí tu archivo Excel de comprobantes AFIP", type=["xlsx"])
 
-if uploaded_file:
+def detectar_columnas(df):
+    cuit_col, proveedor_col = None, None
+    for col in df.columns:
+        if df[col].astype(str).str.contains(r'\b\d{11}\b').any():
+            cuit_col = col
+        if df[col].astype(str).str.contains(r'[^\d]{3,}').any():
+            proveedor_col = col
+    return cuit_col, proveedor_col
+
+if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
+    cuit_col, proveedor_col = detectar_columnas(df)
 
-    try:
-        # Renombrar columnas por posición
-        df.columns.values[6] = 'CUIT'
-        df.columns.values[7] = 'Proveedor'
+    if not cuit_col or not proveedor_col:
+        st.error("No se detectaron columnas válidas para CUIT y Proveedor.")
+    else:
+        def deducir_concepto(proveedor):
+            proveedor = str(proveedor).lower()
+            if "super" in proveedor or "carrefour" in proveedor:
+                return "Supermercado"
+            elif "shell" in proveedor or "ypf" in proveedor:
+                return "Combustible"
+            elif "farmacia" in proveedor:
+                return "Farmacia"
+            else:
+                return "Otros"
 
-        # Filtrar solo las filas con CUIT válidos (11 dígitos numéricos)
-        df = df[df['CUIT'].astype(str).str.fullmatch(r'\d{11}')]
+        df["Concepto Detectado"] = df[proveedor_col].apply(deducir_concepto)
 
-        # Clasificación automática simple
-        df["Concepto Detectado"] = df["Proveedor"].apply(lambda x: "Servicios" if "S.A." in str(x) else "Bienes")
+        st.subheader("Vista previa con conceptos deducidos")
+        st.dataframe(df[[proveedor_col, cuit_col, "Concepto Detectado"]])
 
-        st.subheader("Vista previa de los comprobantes filtrados")
-        st.dataframe(df)
+        output_path = "outputs/comprobantes_deducidos.xlsx"
+        os.makedirs("outputs", exist_ok=True)
+        df.to_excel(output_path, index=False)
+        with open(output_path, "rb") as f:
+            st.download_button("📥 Descargar Excel con conceptos deducidos", f, file_name="comprobantes_deducidos.xlsx")
 
-        # Guardar en memoria
-        output = io.BytesIO()
-        df.to_excel(output, index=False)
-        output.seek(0)
+        st.subheader("Refinar conceptos manualmente")
+        conceptos_refinados = []
+        for i in range(len(df)):
+            concepto_manual = st.text_input(f"Concepto para {df.iloc[i][proveedor_col]} ({df.iloc[i][cuit_col]})", df.iloc[i]["Concepto Detectado"], key=f"{i}")
+            conceptos_refinados.append(concepto_manual)
 
-        # Botón de descarga
-        st.download_button(
-            label="📥 Descargar Excel refinado",
-            data=output,
-            file_name="comprobantes_refinados.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    except Exception as e:
-        st.error(f"Ocurrió un error: {e}")
+        if st.button("Guardar Excel refinado"):
+            df["Concepto Refinado"] = conceptos_refinados
+            refined_path = "outputs/comprobantes_refinados.xlsx"
+            df.to_excel(refined_path, index=False)
+            with open(refined_path, "rb") as f:
+                st.download_button("📥 Descargar Excel refinado", f, file_name="comprobantes_refinados.xlsx")
