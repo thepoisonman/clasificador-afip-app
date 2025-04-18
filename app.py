@@ -1,67 +1,46 @@
 
-import streamlit as st
 import pandas as pd
-import requests
+import streamlit as st
 import os
 
-st.title("Clasificador AFIP - Prueba CUIT Online")
-
-uploaded_file = st.file_uploader("Subí tu archivo de compras AFIP (Excel)", type=["xlsx"])
+# Subir archivo
+uploaded_file = st.file_uploader("Subí tu archivo de comprobantes", type=["xlsx"])
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+    # Leer sin encabezado para buscarlo manualmente
+    df_raw = pd.read_excel(uploaded_file, header=None)
 
-    # Intentar ubicar la columna CUIT correctamente (en la posición 7 según indicaste)
-    cuit_col = df.columns[6]  # posición 7 -> índice 6
-    proveedor_col = df.columns[7]  # posición 8 -> índice 7
+    # Buscar la fila donde está la cabecera real (buscando la palabra 'CUIT')
+    header_row = df_raw[df_raw.apply(lambda row: row.astype(str).str.contains('CUIT').any(), axis=1)].index[0]
 
-    st.write("CUIT detectado en columna:", cuit_col)
-    st.write("Proveedor detectado en columna:", proveedor_col)
+    # Leer de nuevo ahora sí con el header correcto
+    df = pd.read_excel(uploaded_file, header=header_row)
 
-    # Limpiar encabezados erróneos
-    df = df[df[cuit_col].astype(str).str.contains(r'^[0-9]{11}$', na=False)]
+    # Filtrar filas inválidas o con encabezados intermedios
+    df = df[df['CUIT'].notna() & df['CUIT'].astype(str).str.contains('\\d')]
 
-    def obtener_concepto(cuit):
-        api_key = "DEMO-API-KEY"
-        url = f"https://api.cuitonline.com/afip/v1/persona/{cuit}?apikey={api_key}"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("actividad", "No encontrada")
-            else:
-                return "Error API"
-        except:
-            return "Error de conexión"
+    # Detectar conceptos (solo como ejemplo)
+    df["Concepto Detectado"] = "A clasificar"
 
-    df["Concepto Detectado"] = df[cuit_col].apply(obtener_concepto)
+    st.write("Comprobantes cargados:")
+    st.dataframe(df)
 
-    st.write("Vista previa del archivo:")
-    st.dataframe(df[[proveedor_col, cuit_col, "Concepto Detectado"]])
-
-    # Corrección de conceptos manual
-    conceptos_refinados = []
+    # Corrección manual con claves únicas
     for i in range(len(df)):
+        proveedor = df.iloc[i]['Proveedor']
+        cuit = df.iloc[i]['CUIT']
+        concepto_detectado = df.iloc[i]['Concepto Detectado']
         concepto_manual = st.text_input(
-            f"Concepto para {df.iloc[i][proveedor_col]} ({df.iloc[i][cuit_col]})",
-            df.iloc[i]["Concepto Detectado"],
+            f"{proveedor} ({cuit})",
+            concepto_detectado,
             key=f"concepto_{i}"
         )
-        conceptos_refinados.append(concepto_manual)
+        df.at[i, 'Concepto Detectado'] = concepto_manual
 
-    df["Concepto Final"] = conceptos_refinados
-
-    # Descargar archivo corregido
-    if not os.path.exists("outputs"):
-        os.makedirs("outputs")
-
-    output_path = "outputs/comprobantes_clasificados.xlsx"
+    # Guardar resultado
+    output_path = 'outputs/comprobantes_clasificados.xlsx'
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_excel(output_path, index=False)
 
     with open(output_path, "rb") as file:
-        btn = st.download_button(
-            label="📥 Descargar Excel Clasificado",
-            data=file,
-            file_name="comprobantes_clasificados.xlsx"
-        )
-    
+        st.download_button("📥 Descargar Excel Clasificado", file, file_name="clasificados.xlsx")
