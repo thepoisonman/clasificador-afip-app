@@ -12,8 +12,12 @@ if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
     st.write("Vista previa:", df.head())
 
-    if 'CUIT' in df.columns:
-        df['Actividad'] = df['CUIT'].apply(consultar_cuit)
+    # Buscar columnas candidatas a CUIT
+    posibles_cuits = [col for col in df.columns if 'cuit' in col.lower() or 'documento' in col.lower()]
+
+    if posibles_cuits:
+        cuit_col = st.selectbox("Seleccioná la columna que contiene los CUIT:", posibles_cuits)
+        df['Actividad'] = df[cuit_col].apply(consultar_cuit)
         df['Gasto'] = df.apply(clasificar_gasto, axis=1)
 
         st.write("Comprobantes clasificados:", df)
@@ -22,4 +26,5 @@ if uploaded_file is not None:
         df.to_excel(output_path, index=False)
         st.success(f"Archivo exportado: {output_path}")
     else:
-        st.error("El archivo no tiene columna 'CUIT'. Verificá el formato.")
+        st.error("No se encontró ninguna columna que parezca contener CUITs.")
+    
