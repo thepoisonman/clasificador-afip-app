@@ -1,46 +1,37 @@
 
-import pandas as pd
 import streamlit as st
-import os
+import pandas as pd
+from io import BytesIO
 
-# Subir archivo
-uploaded_file = st.file_uploader("Subí tu archivo de comprobantes", type=["xlsx"])
+st.title("Clasificador AFIP App Refinado")
 
-if uploaded_file is not None:
-    # Leer sin encabezado para buscarlo manualmente
-    df_raw = pd.read_excel(uploaded_file, header=None)
+uploaded_file = st.file_uploader("Subí tu archivo Excel AFIP", type=["xlsx"])
 
-    # Buscar la fila donde está la cabecera real (buscando la palabra 'CUIT')
-    header_row = df_raw[df_raw.apply(lambda row: row.astype(str).str.contains('CUIT').any(), axis=1)].index[0]
+if uploaded_file:
+    df = pd.read_excel(uploaded_file)
+    st.write("Vista previa del archivo cargado:", df.head())
 
-    # Leer de nuevo ahora sí con el header correcto
-    df = pd.read_excel(uploaded_file, header=header_row)
+    # Detectar la columna CUIT por posición (columna 7 -> index 6)
+    if df.shape[1] >= 7:
+        df.rename(columns={df.columns[6]: "CUIT", df.columns[7]: "Proveedor"}, inplace=True)
+        df = df[df["CUIT"].astype(str).str.contains(r'\d')]
 
-    # Filtrar filas inválidas o con encabezados intermedios
-    df = df[df['CUIT'].notna() & df['CUIT'].astype(str).str.contains('\\d')]
+        st.write("Filtrado por CUIT válido:", df[["CUIT", "Proveedor"]])
 
-    # Detectar conceptos (solo como ejemplo)
-    df["Concepto Detectado"] = "A clasificar"
+        conceptos = []
+        for i in range(len(df)):
+            concepto_manual = st.text_input(
+                f"Concepto para {df.iloc[i]['Proveedor']} ({df.iloc[i]['CUIT']})",
+                key=f"concepto_{i}"
+            )
+            conceptos.append(concepto_manual)
 
-    st.write("Comprobantes cargados:")
-    st.dataframe(df)
+        df["Concepto Refinado"] = conceptos
 
-    # Corrección manual con claves únicas
-    for i in range(len(df)):
-        proveedor = df.iloc[i]['Proveedor']
-        cuit = df.iloc[i]['CUIT']
-        concepto_detectado = df.iloc[i]['Concepto Detectado']
-        concepto_manual = st.text_input(
-            f"{proveedor} ({cuit})",
-            concepto_detectado,
-            key=f"concepto_{i}"
-        )
-        df.at[i, 'Concepto Detectado'] = concepto_manual
+        # Botón de descarga
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        st.download_button("Descargar Excel Refinado", data=output.getvalue(), file_name="clasificado.xlsx")
 
-    # Guardar resultado
-    output_path = 'outputs/comprobantes_clasificados.xlsx'
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_excel(output_path, index=False)
-
-    with open(output_path, "rb") as file:
-        st.download_button("📥 Descargar Excel Clasificado", file, file_name="clasificados.xlsx")
+    else:
+        st.error("El archivo no contiene suficientes columnas para detectar CUIT y Proveedor.")
