@@ -1,72 +1,55 @@
 
 import streamlit as st
 import pandas as pd
-import requests
 import os
+import requests
 
-st.title("Clasificador de Comprobantes AFIP")
+# Configuración
+API_URL = "https://cuitonline.com/api/v1/cuit/"
+API_KEY = "prueba"
 
-uploaded_file = st.file_uploader("Subí tu archivo de comprobantes AFIP (Excel)", type=["xlsx"])
+# Crear carpeta outputs si no existe
+os.makedirs("outputs", exist_ok=True)
 
-if uploaded_file is not None:
-    # Leer Excel
-    df = pd.read_excel(uploaded_file)
-    st.write("### Vista previa de los datos")
-    st.dataframe(df.head())
+st.title("Clasificador AFIP App")
 
-    # Detectar columnas candidatas a CUIT
-    posibles_cuit = [col for col in df.columns if 'cuit' in col.lower() or 'documento' in col.lower()]
-    if not posibles_cuit:
-        st.error("No se encontró ninguna columna que parezca contener CUITs.")
-        st.stop()
+uploaded_file = st.file_uploader("Subí tu archivo de compras AFIP (.xlsx)", type=["xlsx"])
 
-    cuit_col = st.selectbox("Seleccioná la columna que contiene el CUIT:", posibles_cuit)
+if uploaded_file:
+    df = pd.read_excel(uploaded_file, header=1)
 
-    # Consulta a CUIT Online API
-    api_key = "APIKEY_DE_PRUEBA_123456"
-    api_url = "https://api.cuitonline.com/v1/constancia"
+    # Verificar si existe la columna CUIT
+    if "CUIT" not in df.columns:
+        st.error("El archivo no tiene columna 'CUIT'. Verificá el formato.")
+    else:
+        st.write("Vista previa de los datos:")
+        st.dataframe(df.head())
 
-    def consultar_cuit_online(cuit):
-        try:
-            resp = requests.get(f"{api_url}/{cuit}?apikey={api_key}")
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("actividad_principal", "Sin datos")
-        except:
-            pass
-        return "Error consulta"
+        proveedor_col = st.selectbox("Seleccioná la columna de proveedores:", df.columns, index=8)
 
-    st.write("### Consultando actividad AFIP...")
-    df["Actividad AFIP"] = df[cuit_col].astype(str).apply(consultar_cuit_online)
+        # Consultar CUIT Online API
+        actividades = []
+        for cuit in df["CUIT"].astype(str):
+            response = requests.get(f"{API_URL}{cuit}?key={API_KEY}")
+            if response.status_code == 200:
+                data = response.json()
+                actividad = data.get("actividad", "No encontrada")
+            else:
+                actividad = "No encontrada"
+            actividades.append(actividad)
 
-    # Clasificación manual asistida
-    st.write("### Refinar conceptos manualmente si es necesario")
-    conceptos = []
-    for idx, row in df.iterrows():
-        default = row["Actividad AFIP"]
-        opcion = st.selectbox(
-            f"Concepto para {row.get('Proveedor', row.get(cuit_col))}",
-            ["Servicios", "Bienes", "Transporte", "Alquiler", "Otros"],
-            index=0,
-            key=f"concepto_{idx}"
-        )
-        conceptos.append(opcion)
-    df["Concepto"] = conceptos
+        df["Actividad"] = actividades
 
-    # Mostrar resultado final
-    st.write("### Resultado final")
-    st.dataframe(df)
+        # Refinación manual de conceptos
+        conceptos = []
+        for proveedor in df[proveedor_col]:
+            concepto = st.text_input(f"Concepto para {proveedor}:", "")
+            conceptos.append(concepto)
 
-    # Guardar y descargar
-    output_dir = "outputs"
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "comprobantes_clasificados.xlsx")
-    df.to_excel(output_path, index=False)
+        df["Concepto"] = conceptos
 
-    with open(output_path, "rb") as f:
-        st.download_button(
-            "📥 Descargar archivo clasificado",
-            data=f,
-            file_name="comprobantes_clasificados.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        output_path = "outputs/comprobantes_clasificados.xlsx"
+        df.to_excel(output_path, index=False)
+        st.success(f"Archivo guardado en {output_path}")
+        with open(output_path, "rb") as f:
+            st.download_button("Descargar Excel Clasificado", f, file_name="comprobantes_clasificados.xlsx")
