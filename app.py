@@ -74,8 +74,13 @@ if uploaded_file:
     # Si la detección automática falla, permitir que el usuario seleccione las columnas correctas
     if not cuit_col or not proveedor_col:
         st.subheader("Seleccione manualmente las columnas de CUIT y Proveedor")
-        cuit_col = st.selectbox("Seleccione la columna de CUIT", df.columns)
-        proveedor_col = st.selectbox("Seleccione la columna de Proveedor", df.columns)
+        cuit_col = st.selectbox("Seleccione la columna de CUIT", df.columns, key="cuit_column")
+        proveedor_col = st.selectbox("Seleccione la columna de Proveedor", df.columns, key="proveedor_column")
+
+        # Guardar la corrección del usuario en memoria para futuros usos
+        if cuit_col and proveedor_col:
+            memoria['ultimo_cuit_col'] = cuit_col
+            memoria['ultimo_proveedor_col'] = proveedor_col
 
     # Renombrar las columnas para mejorar la visualización
     if len(df.columns) == 9:
