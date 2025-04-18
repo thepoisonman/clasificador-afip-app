@@ -1,55 +1,53 @@
 
 import streamlit as st
 import pandas as pd
-import os
 import requests
-
-# Configuración
-API_URL = "https://cuitonline.com/api/v1/cuit/"
-API_KEY = "prueba"
+import os
 
 # Crear carpeta outputs si no existe
-os.makedirs("outputs", exist_ok=True)
+if not os.path.exists("outputs"):
+    os.makedirs("outputs")
 
 st.title("Clasificador AFIP App")
 
-uploaded_file = st.file_uploader("Subí tu archivo de compras AFIP (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí tu archivo de comprobantes AFIP", type=["xlsx"])
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file, header=1)
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
 
-    # Verificar si existe la columna CUIT
-    if "CUIT" not in df.columns:
-        st.error("El archivo no tiene columna 'CUIT'. Verificá el formato.")
-    else:
-        st.write("Vista previa de los datos:")
-        st.dataframe(df.head())
+    # Eliminar encabezados fantasma (filas donde 'Fecha' o 'Tipo' aparecen en la primera columna)
+    df = df[~df.iloc[:, 0].astype(str).str.contains("Fecha|Tipo", case=False, na=False)].copy()
 
-        proveedor_col = st.selectbox("Seleccioná la columna de proveedores:", df.columns, index=8)
+    # Renombrar columnas por posición fija (según formato AFIP)
+    df.columns = ['Fecha', 'Tipo', 'Punto de Venta', 'Número Desde', 'Número Hasta', 'Tipo Doc. Vendedor',
+                  'CUIT', 'Proveedor', 'Importe'] + list(df.columns[9:])
 
-        # Consultar CUIT Online API
-        actividades = []
-        for cuit in df["CUIT"].astype(str):
-            response = requests.get(f"{API_URL}{cuit}?key={API_KEY}")
+    # Consulta automática a CUIT Online
+    api_key = "PRUEBA_API_KEY"
+    conceptos = []
+    for cuit in df['CUIT']:
+        try:
+            response = requests.get(f"https://api.cuitonline.com/cuit/{cuit}/{api_key}")
             if response.status_code == 200:
                 data = response.json()
-                actividad = data.get("actividad", "No encontrada")
+                actividad = data.get("actividad", "No encontrado")
+                conceptos.append(actividad)
             else:
-                actividad = "No encontrada"
-            actividades.append(actividad)
+                conceptos.append("No encontrado")
+        except:
+            conceptos.append("Error")
 
-        df["Actividad"] = actividades
+    df["Concepto Detectado"] = conceptos
 
-        # Refinación manual de conceptos
-        conceptos = []
-        for proveedor in df[proveedor_col]:
-            concepto = st.text_input(f"Concepto para {proveedor}:", "")
-            conceptos.append(concepto)
+    # Permitir corrección manual
+    for i in range(len(df)):
+        concepto_manual = st.text_input(f"Concepto para {df.iloc[i]['Proveedor']}", df.iloc[i]["Concepto Detectado"])
+        df.at[i, "Concepto Detectado"] = concepto_manual
 
-        df["Concepto"] = conceptos
+    # Guardar Excel
+    output_path = "outputs/clasificados.xlsx"
+    df.to_excel(output_path, index=False)
 
-        output_path = "outputs/comprobantes_clasificados.xlsx"
-        df.to_excel(output_path, index=False)
-        st.success(f"Archivo guardado en {output_path}")
-        with open(output_path, "rb") as f:
-            st.download_button("Descargar Excel Clasificado", f, file_name="comprobantes_clasificados.xlsx")
+    st.success(f"Archivo procesado y guardado en {output_path}")
+    with open(output_path, "rb") as file:
+        st.download_button("Descargar resultado", file, file_name="clasificados.xlsx")
