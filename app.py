@@ -26,13 +26,6 @@ if uploaded_file:
     if df.iloc[0].str.contains("Fecha").any():
         df = df[1:].reset_index(drop=True)
 
-    # Verificar el número de columnas y asignar encabezados correctamente
-    if len(df.columns) == 9:
-        df.columns = ['Fecha', 'Tipo', 'Punto de Venta', 'Número Desde', 'Número Hasta', 'Tipo Doc. Vendedor', 'CUIT', 'Proveedor', 'Concepto Detectado']
-    else:
-        st.error("El archivo tiene un número de columnas diferente al esperado. Verifique el formato.")
-        st.stop()
-
     # Deducción de CUIT/DNI y Proveedor a partir de los datos de la columna
     def es_cuit_o_dni(value):
         # Validar si es un CUIT (11 dígitos) o un DNI (7-8 dígitos)
@@ -71,6 +64,12 @@ if uploaded_file:
                     break
             if proveedor_col:
                 break
+
+    # Renombrar las columnas para mejorar la visualización
+    if len(df.columns) == 9:
+        df.columns = ['Fecha', 'Tipo', 'Punto de Venta', 'Número Desde', 'Número Hasta', 'Tipo Doc. Vendedor', 'CUIT', 'Proveedor', 'Concepto Detectado']
+    else:
+        st.warning("El archivo no tiene el número exacto de columnas esperado, pero se continuará con el procesamiento.")
 
     if cuit_col and proveedor_col:
         df['CUIT'] = df[cuit_col]
