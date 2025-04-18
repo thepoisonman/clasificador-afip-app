@@ -1,46 +1,64 @@
 
 import streamlit as st
 import pandas as pd
-import os
+import requests
+import io
 
-st.title("Clasificador AFIP App")
+st.title("Clasificador de Comprobantes AFIP")
 
-uploaded_file = st.file_uploader("Subí tu archivo Excel de compras AFIP", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí tu archivo de compras AFIP (.xlsx)", type=["xlsx"])
 
 if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
+    df = pd.read_excel(uploaded_file, skiprows=7)  # ignorar encabezados iniciales
 
-    # Validación mínima
-    if df.shape[1] < 8:
-        st.error("El archivo debe tener al menos 8 columnas.")
+    # Verificar si hay una columna CUIT
+    cuit_col = None
+    for col in df.columns:
+        if "CUIT" in col.upper():
+            cuit_col = col
+            break
+
+    if cuit_col is None:
+        st.error("No se encontró una columna que contenga 'CUIT'. Verificá el archivo.")
     else:
-        # Filtramos filas válidas
-        df = df[df.iloc[:, 6].apply(lambda x: isinstance(x, (int, float, str)) and str(x).isdigit())]
+        df["CUIT"] = df[cuit_col]
 
-        df['CUIT'] = df.iloc[:, 6]
-        df['Proveedor'] = df.iloc[:, 7]
+        # Detectar conceptos automáticos según proveedor
+        def detectar_concepto(proveedor):
+            if pd.isna(proveedor):
+                return "Desconocido"
+            proveedor = proveedor.lower()
+            if "super" in proveedor or "mercado" in proveedor:
+                return "Alimentos"
+            if "YPF" in proveedor or "AXION" in proveedor:
+                return "Combustible"
+            return "Otros"
 
-        conceptos_detectados = []
-        with st.form("refinador_form"):
-            for i, row in df.iterrows():
-                proveedor = row['Proveedor']
-                cuit = row['CUIT']
-                valor_detectado = "Sin clasificar"
-                concepto_manual = st.text_input(
-                    f"Concepto para {proveedor} (CUIT {cuit})",
-                    valor_detectado,
-                    key=f"concepto_{i}"
-                )
-                conceptos_detectados.append(concepto_manual)
+        df["Concepto Detectado"] = df["Proveedor"].apply(detectar_concepto)
 
-            submitted = st.form_submit_button("Guardar clasificaciones")
+        # Corrección manual
+        st.subheader("Correcciones manuales")
+        conceptos = []
+        for i in range(len(df)):
+            proveedor = df.iloc[i]["Proveedor"]
+            cuit = df.iloc[i]["CUIT"]
+            concepto_detectado = df.iloc[i]["Concepto Detectado"]
+            concepto_manual = st.text_input(
+                f"{proveedor} ({cuit})", concepto_detectado, key=f"{i}"
+            )
+            conceptos.append(concepto_manual)
 
-        if submitted:
-            df['Concepto Detectado'] = conceptos_detectados
+        df["Concepto Final"] = conceptos
 
-            # Crear carpeta outputs
-            os.makedirs("outputs", exist_ok=True)
-            output_path = os.path.join("outputs", "clasificados.xlsx")
-            df.to_excel(output_path, index=False)
+        # Descargar archivo resultante
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
+        output.seek(0)
 
-            st.success(f"Archivo guardado en {output_path}")
+        st.download_button(
+            label="Descargar Excel Clasificado",
+            data=output,
+            file_name="clasificado_afip.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
