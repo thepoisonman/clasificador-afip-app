@@ -1,3 +1,3 @@
 # Clasificador AFIP App
 
-Instrucciones de instalación y uso.
+App para clasificar comprobantes AFIP automáticamente usando CUIT Online.

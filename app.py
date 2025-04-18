@@ -1,50 +1,25 @@
 
 import streamlit as st
 import pandas as pd
-import requests
-import os
+from utils.api_cuit import consultar_cuit
+from utils.classifier import clasificar_gasto
 
-st.title("Clasificador de Comprobantes AFIP")
+st.title('Clasificador de Comprobantes AFIP')
 
-# Subir archivo Excel
-uploaded_file = st.file_uploader("Subí tu archivo de comprobantes AFIP (Compras o Mis Comprobantes Recibidos)", type=["xlsx"])
+uploaded_file = st.file_uploader("Subí el archivo de comprobantes", type=["xlsx"])
 
-if uploaded_file:
-    xls = pd.ExcelFile(uploaded_file)
-    df = pd.read_excel(uploaded_file, sheet_name=xls.sheet_names[0], skiprows=1)
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    st.write("Vista previa:", df.head())
 
-    # Normalizar columnas según el formato
-    if 'Nro. Doc. Emisor' in df.columns:
-        # Formato "Mis Comprobantes Recibidos"
-        df.rename(columns={
-            'Nro. Doc. Emisor': 'CUIT',
-            'Denominación Emisor': 'Proveedor',
-            'Imp. Total': 'Total'
-        }, inplace=True)
-    elif 'CUIT' in df.columns:
-        # Formato "Comprobantes de Compras"
-        pass  # ya está bien
+    if 'CUIT' in df.columns:
+        df['Actividad'] = df['CUIT'].apply(consultar_cuit)
+        df['Gasto'] = df.apply(clasificar_gasto, axis=1)
+
+        st.write("Comprobantes clasificados:", df)
+
+        output_path = f"data/export/comprobantes_clasificados.xlsx"
+        df.to_excel(output_path, index=False)
+        st.success(f"Archivo exportado: {output_path}")
     else:
-        st.error("⚠️ Formato de archivo no reconocido. Subí un archivo exportado de AFIP.")
-        st.stop()
-
-    st.write("📄 Comprobantes cargados:")
-    st.dataframe(df)
-
-    api_key = os.getenv("CUIT_API_KEY", "api_key_demo")
-
-    def buscar_categoria(cuit):
-        url = f"https://cuitonline.com/api/v1/companies/{cuit}?api-key={api_key}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            actividad = data.get("actividad_principal", "Sin info")
-            return actividad
-        return "No encontrado"
-
-    st.write("🔍 Consultando CUIT Online...")
-    df["Actividad"] = df["CUIT"].astype(str).apply(buscar_categoria)
-
-    st.write("📊 Resultado con Actividad:")
-    st.dataframe(df)
-    
+        st.error("El archivo no tiene columna 'CUIT'. Verificá el formato.")
