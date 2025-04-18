@@ -22,9 +22,9 @@ uploaded_file = st.file_uploader("Subí tu Excel de comprobantes AFIP", type=["x
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
 
-    # Detectar columnas CUIT y Proveedor
-    cuit_col = next((col for col in df.columns if df[col].astype(str).str.contains(r'\d{7,8,11}').any()), None)
-    proveedor_col = next((col for col in df.columns if 'mercado' in df[col].astype(str).str.lower().values or 'proveedor' in col.lower()), None)
+    # Detectar las columnas de CUIT y Proveedor de manera flexible, incluyendo casos como "Número Documento Emisor"
+    cuit_col = next((col for col in df.columns if 'cuit' in col.lower() or 'dni' in col.lower() or 'documento' in col.lower() or 'emisor' in col.lower()), None)
+    proveedor_col = next((col for col in df.columns if 'proveedor' in col.lower() or 'razon' in col.lower() or 'emisor' in col.lower()), None)
 
     if cuit_col and proveedor_col:
         df['CUIT'] = df[cuit_col]
